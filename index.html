@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chaos in the Text · Trident</title>
+  <meta name="description" content="Chaos in the Text: Revealing the Modality Preference in Mixed-Modality Retrievers. We find that multimodal retrievers systematically over-score text documents and introduce Trident, a Multi-Positive View InfoNCE training framework that removes this bias.">
+  <meta name="keywords" content="multimodal retrieval, mixed-modality, modality preference, modality gap, CLIP, Qwen3-VL-Embedding, InfoNCE, RAG, visual document retrieval">
+
+  <!-- Social preview (1200x630). After deploying, switch to the absolute URL: https://<user>.github.io/<repo>/static/images/og-image.png -->
+  <meta property="og:title" content="Chaos in the Text: Revealing the Modality Preference in Mixed-Modality Retrievers">
+  <meta property="og:description" content="Irrelevant text outranks relevant images. We reveal why, and fix it with Trident.">
+  <meta property="og:image" content="static/images/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔱</text></svg>">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+<!-- ============================== NAV ============================== -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#top" class="nav-brand"><span class="trident-glyph">🔱</span> Trident</a>
+    <div class="nav-links" id="navLinks">
+      <a href="#tldr">TL;DR</a>
+      <a href="#phenomenon">Phenomenon</a>
+      <a href="#why">Why</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#analysis">Analysis</a>
+      <!-- <a href="#qa">Q&amp;A</a> -->
+      <a href="#bibtex">BibTeX</a>
+    </div>
+    <button class="nav-toggle" id="navToggle" aria-label="Menu">☰</button>
+  </div>
+  <div class="nav-progress" id="navProgress"></div>
+</nav>
+
+<!-- ============================== HERO ============================== -->
+<header class="hero" id="top">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="container narrow">
+    <div class="venue-badge">Under Review · 2026</div>
+    <h1 class="title">
+      <span class="title-hook">Chaos in the Text</span>
+      <span class="title-sub">Revealing the Modality Preference in Mixed-Modality Retrievers</span>
+    </h1>
+
+    <!-- AUTHORS — replace after de-anonymisation -->
+    <div class="authors">
+      <span class="author"><a href="#">Yubo Sun</a><sup>1*</sup></span>
+      <span class="author"><a href="#">Chunyi Peng</a><sup>2*</sup></span>
+      <span class="author"><a href="#">Yukun Yan</a><sup>3†</sup></span>
+      <span class="author"><a href="#">Zhenghao Liu</a><sup>2†</sup></span>
+      <span class="author"><a href="#">Zhipeng Xu</a><sup>2</sup></span>
+      <span class="author"><a href="#">Sen Mei</a><sup>3</sup></span>
+      <span class="author"><a href="#">Linlin Xin</a><sup>1</sup></span>
+      <span class="author"><a href="#">Zheni Zeng</a><sup>4</sup></span>
+      <span class="author"><a href="#">Maosong Sun</a><sup>3</sup></span>
+    </div>
+    <div class="affils">
+      <span><sup>1</sup>University of the Chinese Academy of Sciences</span>
+      <span><sup>2</sup>Northeastern University</span>
+      <span class="affil-break"></span>
+      <span><sup>3</sup>Tsinghua University</span>
+      <span><sup>4</sup>Nanjing University</span>
+    </div>
+    <div class="affil-notes"><sup>*</sup>Equal contribution &nbsp;·&nbsp; <sup>†</sup>Corresponding author</div>
+
+    <div class="link-buttons">
+      <a class="btn" href="https://arxiv.org/abs/2610.11816" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="2"/></svg>Paper</a>
+      <a class="btn" href="https://github.com/OpenBMB/Trident" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.38-3.88-1.38-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>Code</a>
+      <a class="btn" href="https://huggingface.co/openbmb/Trident-Qwen3VL-2B" target="_blank" rel="noopener"><span class="btn-ico">🤗</span>Trident-Qwen3VL-2B</a>
+      <a class="btn" href="https://huggingface.co/datasets/openbmb/Trident-Train" target="_blank" rel="noopener"><span class="btn-ico">🤗</span>Trident-Train</a>
+      <a class="btn" href="https://huggingface.co/datasets/openbmb/Trident-Eval" target="_blank" rel="noopener"><span class="btn-ico">🤗</span>Trident-Eval</a>
+    </div>
+
+    <p class="hero-abstract">
+      Multimodal retrievers work well on <b>pure-image</b> or <b>pure-text</b> corpora — but real corpora mix both.
+      We show that when modalities coexist, retrieval quality collapses along a <b>V-shaped curve</b>,
+      because models <b>systematically over-score text</b>: an irrelevant passage routinely outranks the
+      relevant chart or slide. We call this <em>Chaos in the Text</em>, trace it to a <b>modality preference</b>
+      inside the model, and remove it with <b>Trident</b>, a tri-view contrastive objective.
+    </p>
+  </div>
+
+  <!-- TEASER: animated video (optional) falls back to Fig. 1 -->
+  <div class="container">
+    <figure class="teaser card">
+      <!-- ▶ ANIMATION SLOT (optional): static/videos/teaser.mp4 — see README "Optional assets".
+           If the video file does not exist, the static image below is shown instead. -->
+      <video class="teaser-video" autoplay muted loop playsinline poster="static/images/fig1_teaser.png" data-fallback="teaser-img">
+        <source src="static/videos/teaser.mp4" type="video/mp4">
+      </video>
+      <div class="ph-wrap" id="teaser-img" hidden>
+        <img src="static/images/fig1_teaser.png" alt="Figure 1: V-shaped curve and Chaos in the Text example" data-ph="Fig. 1 (a)+(b) — full teaser figure (page 2)">
+      </div>
+      <figcaption>
+        <b>(a)</b> As image documents are progressively replaced by their text descriptions, NDCG@10 follows an asymmetric
+        V-shaped curve. <b>(b)</b> <em>Chaos in the Text</em>: loosely related text documents take every top-<i>K</i> slot,
+        while the chart holding the answer is pushed to rank #12.
+      </figcaption>
+    </figure>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================== TL;DR ============================== -->
+<section class="section" id="tldr">
+  <div class="container">
+    <div class="eyebrow">TL;DR</div>
+    <h2 class="section-title">Three findings, one fix</h2>
+
+    <div class="tldr-grid">
+      <article class="tldr-card reveal">
+        <div class="tldr-num">01</div>
+        <h3>Mixing modalities breaks retrieval</h3>
+        <p>Across 9 CLIP- and VLM-based retrievers, NDCG@10 is strong on single-modality corpora but drops sharply — up to <b>−29 pts</b> — once text and image documents coexist.</p>
+        <div class="tldr-stat"><span class="big" data-count="0.94" data-dec="2">0.94</span><span class="arrow">→</span><span class="big bad" data-count="0.65" data-dec="2">0.65</span><span class="cap">image-only → mixed corpus</span></div>
+      </article>
+      <article class="tldr-card reveal">
+        <div class="tldr-num">02</div>
+        <h3>Text is systematically over-scored</h3>
+        <p>For the <i>same</i> document, the text version scores far higher than the image version. An irrelevant text document beats the relevant image for up to <b>100%</b> of queries.</p>
+        <div class="tldr-stat"><span class="big bad" data-count="94.6" data-dec="1" data-suffix="%">94.6%</span><span class="cap">queries where irrelevant text outranks the relevant image (Jina-CLIP-v2)</span></div>
+      </article>
+      <article class="tldr-card reveal accent">
+        <div class="tldr-num">03</div>
+        <h3>Trident removes the preference</h3>
+        <p>Training with text / image / fused views as <b>co-equal positives</b> in one shared softmax flattens the V, closes the similarity gap, and improves single-modality scores too.</p>
+        <div class="tldr-stat"><span class="big" data-count="40.12" data-dec="1">40.1</span><span class="arrow">→</span><span class="big good" data-count="73.90" data-dec="1">73.9</span><span class="cap">Mix-corpus avg NDCG@10, Qwen3-VL-2B</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 1. PHENOMENON ============================== -->
+<section class="section alt" id="phenomenon">
+  <div class="container">
+    <div class="eyebrow">Part 1 · The Phenomenon</div>
+    <h2 class="section-title">How do retrievers behave on mixed-modality corpora?</h2>
+    <p class="lead">
+      We take an image corpus (ChartQA, SlideVQA) and, for each document, build three semantically matched views with
+      Qwen3-VL-235B: a <span class="tag t-text">Text</span> view (detailed description), an
+      <span class="tag t-image">Image</span> view (original), and a <span class="tag t-fused">Fused</span> view (image + short summary).
+      Sampling one view per document at controlled ratios keeps the <b>content fixed</b> and changes only the <b>modality composition</b>.
+    </p>
+
+    <!-- ---------- Interactive 1: V-curve slider ---------- -->
+    <div class="card widget reveal">
+      <div class="widget-head">
+        <h3>🎚 Slide the corpus from all-image to all-text</h3>
+        <span class="widget-note" id="vcurveNote"></span>
+      </div>
+      <div class="vcurve-grid">
+        <div>
+          <div class="corpus-grid" id="corpusGrid" aria-label="Corpus composition"></div>
+          <div class="slider-row">
+            <span class="tag t-image">Image</span>
+            <input type="range" id="textRatio" min="0" max="100" value="0" step="1" aria-label="Text document ratio">
+            <span class="tag t-text">Text</span>
+          </div>
+          <div class="readout">
+            <div><span class="ro-label">Text ratio</span><span class="ro-val" id="roRatio">0%</span></div>
+            <div><span class="ro-label">Mean NDCG@10</span><span class="ro-val" id="roScore">0.94</span></div>
+            <div><span class="ro-label">Zone</span><span class="ro-val" id="roZone">Image-dominant</span></div>
+          </div>
+          <button class="btn-sm" id="vcurvePlay">▶ Play sweep</button>
+        </div>
+        <div class="plot" id="vcurvePlot"></div>
+      </div>
+    </div>
+
+    <details class="static-figs">
+      <summary>Show the static figure from the paper (Fig. 2 + Appendix Figs. 8–9)</summary>
+      <div class="ph-wrap"><img src="static/images/fig2_surfaces.png" alt="Figure 2" data-ph="Fig. 2 — 6 surface plots (page 3)"></div>
+      <div class="two-col">
+        <div class="ph-wrap"><img src="static/images/fig8_surfaces_chartqa.png" alt="Figure 8" data-ph="Fig. 8 — 9 models on ChartQA (page 15)"></div>
+        <div class="ph-wrap"><img src="static/images/fig9_surfaces_slidevqa.png" alt="Figure 9" data-ph="Fig. 9 — 9 models on SlideVQA (page 16)"></div>
+      </div>
+    </details>
+
+    <!-- ---------- Chaos in the Text: distractors ---------- -->
+    <div class="split reveal">
+      <div class="split-text">
+        <h3 class="sub-title">“Chaos in the Text”</h3>
+        <p>Is the drop simply because the candidate pool got bigger? We add <b>equal numbers</b> of irrelevant Wikipedia
+          <span class="tag t-text">text passages</span> or <span class="tag t-image">images</span> to the original image corpus.</p>
+        <p>Irrelevant images barely hurt. Irrelevant text causes a <b>sharp collapse</b> — at 50k distractors the gap reaches
+          <b>Δ 0.31–0.51</b> NDCG@10 across models. Pool size alone cannot explain this: modality is steering the ranking.</p>
+        <div class="callout">
+          <b>Key takeaway.</b> Strong single-modality performance does <u>not</u> guarantee reliable retrieval once text and images share one ranked list.
+        </div>
+      </div>
+      <figure class="split-fig">
+        <div class="ph-wrap"><img src="static/images/fig3_distractors.png" alt="Figure 3" data-ph="Fig. 3 — text vs image distractors (page 4)"></div>
+        <figcaption>Text distractors (blue) degrade NDCG@10 far more than the same number of image distractors (orange).</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 2. WHY ============================== -->
+<section class="section" id="why">
+  <div class="container">
+    <div class="eyebrow">Part 2 · The Cause</div>
+    <h2 class="section-title">Why does text win? <span class="hl">Modality preference.</span></h2>
+    <p class="lead">
+      We score the same queries against three <b>semantically identical</b> corpora (pure text, pure image, fused).
+      If ranking depended only on relevance, the positive-pair similarity should not depend on the modality. It does — strongly.
+    </p>
+
+    <div class="card widget reveal">
+      <div class="widget-head">
+        <h3>📊 Positive similarity &amp; interference rate by document modality</h3>
+        <div class="seg" id="prefMetric">
+          <button class="active" data-metric="intf">Interference rate</button>
+          <button data-metric="pos">Positive similarity</button>
+        </div>
+      </div>
+      <div class="plot" id="prefPlot"></div>
+      <p class="caption" id="prefCaption"></p>
+    </div>
+
+    <div class="two-col reveal">
+      <div class="mini-card">
+        <h4>① Relevant docs are scored by modality</h4>
+        <p>For every model, text positives get the highest similarity, image positives the lowest, fused in between —
+          e.g. SigLIP2-L: <b>0.777</b> (text) vs <b>0.141</b> (image) for the <i>same</i> content.</p>
+      </div>
+      <div class="mini-card">
+        <h4>② The bias flips rankings</h4>
+        <p>Plotting each query's positive score against its strongest irrelevant text, most image-positive queries lie
+          <b>above y = x</b>: the irrelevant text wins. Fused views help, but only partially.</p>
+      </div>
+    </div>
+
+    <details class="static-figs" open>
+      <summary>Paper figure: violin plots + per-query scatter (Fig. 4)</summary>
+      <div class="ph-wrap"><img src="static/images/fig4_preference.png" alt="Figure 4" data-ph="Fig. 4 — violins (a) + scatter (b) (page 5)"></div>
+      <p class="caption">Points above the diagonal = queries where an irrelevant text document outranks the relevant one. More models in Appendix Figs. 11–12.</p>
+    </details>
+
+    <div class="callout neutral reveal">
+      <b>Not the classic “modality gap”.</b> Prior work studies a geometric offset between image and text embeddings, which is harmless when
+      all candidates share one modality (the offset cancels in ranking). In mixed corpora, what corrupts ranking is a
+      <b>modality preference</b> in the scores themselves. Post-hoc calibration (GR-CLIP) shrinks but does not remove it.
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 3. METHOD ============================== -->
+<section class="section alt" id="method">
+  <div class="container">
+    <div class="eyebrow">Part 3 · The Fix</div>
+    <h2 class="section-title">🔱 Trident: three co-equal positive views, one shared softmax</h2>
+
+    <figure class="card reveal">
+      
+      <div class="ph-wrap"><img src="static/images/fig5_method.png" alt="Figure 5: Trident overview" data-ph="Fig. 5 — Trident overview (page 6)"></div>
+      <figcaption>Left: each document yields text, image and fused views; all other views in the batch are negatives. Right: the
+        objective decomposes into <b>relevance discrimination</b> and <b>positive-view balance</b>.</figcaption>
+    </figure>
+
+    <div class="method-steps">
+      <div class="step reveal">
+        <div class="step-num">1</div>
+        <div>
+          <h4>Modality-balanced data</h4>
+          <p>For each image document, Qwen3-VL-235B writes a detailed description (<span class="tag t-text">Text</span>) and a short summary
+            paired with the image (<span class="tag t-fused">Fused</span>). With the original <span class="tag t-image">Image</span>, a single-positive pair becomes a
+            <b>three-view</b> pair.</p>
+        </div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">2</div>
+        <div>
+          <h4>Why per-modality InfoNCE is not enough</h4>
+          <p>A separately normalised loss is invariant to adding a modality-wide offset <span class="math">c_m(q)</span> — it learns rankings
+            <i>within</i> a modality but never fixes the score baselines <i>across</i> modalities.</p>
+          <div class="eq">$$\frac{e^{(s_m^+ + c_m)/\tau}}{\sum_{d\in\mathcal D_m} e^{(s_m(q,d)+c_m)/\tau}} = \frac{e^{s_m^+/\tau}}{\sum_{d\in\mathcal D_m} e^{s_m(q,d)/\tau}}$$</div>
+        </div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">3</div>
+        <div>
+          <h4>Multi-Positive View InfoNCE</h4>
+          <p>Put all three positives and all negatives in <b>one</b> softmax denominator, and average their log-probabilities:</p>
+          <div class="eq">$$\mathcal L_{\text{trident}}(q) = -\frac{1}{|\mathcal P|}\sum_{p\in\mathcal P}\log\frac{\exp(\mathrm{sim}(q,p)/\tau)}{\sum_{j\in\mathcal P\cup\mathcal N}\exp(\mathrm{sim}(q,j)/\tau)}$$</div>
+          <p>which decomposes exactly into</p>
+          <div class="eq eq-hl">$$\mathcal L_{\text{trident}} = \underbrace{-\log\rho}_{\text{relevance discrimination}} \;+\; \underbrace{D_{\mathrm{KL}}(u\,\|\,r)}_{\text{positive-view balance}} \;+\; \log M$$</div>
+          <p class="small">ρ = total probability on positives; r = each view's share within the positives; u = uniform (1/3 each).
+            The first term separates relevant from irrelevant; the second stops any single modality — usually text — from monopolising the positive mass.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Interactive 3: loss playground ---------- -->
+    <div class="card widget reveal" id="playground">
+      <div class="widget-head">
+        <h3>🧪 Loss playground — watch the shared softmax rebalance a single query</h3>
+        <span class="widget-note">Live computation of Eq. (4)–(6) and the gradients in Appendix E</span>
+      </div>
+      <div class="pg-grid">
+        <div class="pg-controls">
+          <div class="pg-group-title">Positive views (same document)</div>
+          <label class="pg-slider t-text">Text positive <span id="vSt"></span><input type="range" id="sT" min="-0.2" max="1" step="0.01" value="0.66"></label>
+          <label class="pg-slider t-image">Image positive <span id="vSi"></span><input type="range" id="sI" min="-0.2" max="1" step="0.01" value="0.48"></label>
+          <label class="pg-slider t-fused">Fused positive <span id="vSf"></span><input type="range" id="sF" min="-0.2" max="1" step="0.01" value="0.51"></label>
+          <div class="pg-group-title">Negatives</div>
+          <label class="pg-slider t-neg">Irrelevant text (hard neg.) <span id="vSn1"></span><input type="range" id="sN1" min="-0.2" max="1" step="0.01" value="0.58"></label>
+          <label class="pg-slider t-neg">Irrelevant image <span id="vSn2"></span><input type="range" id="sN2" min="-0.2" max="1" step="0.01" value="0.30"></label>
+          <label class="pg-slider">Temperature τ <span id="vTau"></span><input type="range" id="tau" min="0.02" max="0.2" step="0.005" value="0.05"></label>
+          <div class="pg-buttons">
+            <button class="btn-sm primary" id="pgTrain">▶ Train (gradient steps)</button>
+            <button class="btn-sm" id="pgStep">Step ×1</button>
+            <button class="btn-sm" id="pgReset">Reset to baseline</button>
+          </div>
+        </div>
+        <div class="pg-viz">
+          <div class="pg-bars" id="pgBars"></div>
+          <div class="pg-metrics">
+            <div><span class="ro-label">ρ (positive mass)</span><span class="ro-val" id="mRho">–</span></div>
+            <div><span class="ro-label">−log ρ</span><span class="ro-val" id="mRel">–</span></div>
+            <div><span class="ro-label">KL(u‖r)</span><span class="ro-val" id="mKL">–</span></div>
+            <div><span class="ro-label">Loss</span><span class="ro-val" id="mLoss">–</span></div>
+          </div>
+          <div class="pg-rank" id="pgRank"></div>
+        </div>
+      </div>
+      <p class="caption">Bars show softmax probability <i>p<sub>j</sub></i>; arrows show the gradient-descent direction on each score,
+        −∂L/∂s<sub>j</sub> = (𝟙[j∈P]/M − p<sub>j</sub>)/τ. Under-weighted positives (usually the image) are pushed up; the over-weighted text positive and high-scoring negatives are pushed down.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 4. RESULTS ============================== -->
+<section class="section" id="results">
+  <div class="container">
+    <div class="eyebrow">Part 4 · Results</div>
+    <h2 class="section-title">Better on mixed corpora — and on single-modality ones</h2>
+
+    <div class="kpi-row reveal">
+      <div class="kpi"><div class="kpi-val good">+33.8</div><div class="kpi-lab">Mix avg gain over Qwen3-VL-E-2B<br><small>40.12 → 73.90</small></div></div>
+      <div class="kpi"><div class="kpi-val good">+12.8</div><div class="kpi-lab">Mix avg gain over Jina-CLIP-v2<br><small>42.68 → 55.51</small></div></div>
+      <div class="kpi"><div class="kpi-val good">+26.7</div><div class="kpi-lab">2B Trident vs 8B baseline (Mix)<br><small>73.90 vs 47.17</small></div></div>
+      <div class="kpi"><div class="kpi-val good">+2.9</div><div class="kpi-lab">Origin avg gain (no trade-off)<br><small>77.59 → 80.51</small></div></div>
+    </div>
+
+    <div class="card widget reveal">
+      <div class="widget-head">
+        <h3>📋 Visual document retrieval — six benchmarks (NDCG@10)</h3>
+        <div class="controls compact">
+          <div class="seg" id="tblBench">
+            <button class="active" data-t="doc">Visual documents</button>
+            <button data-t="nat">Natural images</button>
+          </div>
+          <div class="seg" id="tblSetting">
+            <button data-s="both">Origin + Mix</button>
+            <button class="active" data-s="mix">Mix only</button>
+            <button data-s="origin">Origin only</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap" id="tableWrap"></div>
+      <p class="caption"><b>Origin</b>: each dataset's original image-only corpus. <b>Mix</b>: all corpora converted to mixed modality and merged into one pool.
+        <b>Bold</b> = best, <u>underline</u> = second best within each model family. Hover a row to highlight it.</p>
+    </div>
+
+    <div class="card widget reveal">
+      <div class="widget-head">
+        <h3>📉 Origin → Mix: who survives the mixed corpus?</h3>
+        <span class="widget-note">Average NDCG@10 over six benchmarks</span>
+      </div>
+      <div class="plot" id="dumbbellPlot"></div>
+      <p class="caption">Each line connects a model's Origin score (○) to its Mix score (●). Most baselines lose 10–37 points; Trident models gain or hold.</p>
+    </div>
+
+    <!-- ---------- Interactive 2: 3D surface explorer ---------- -->
+    <div class="card widget reveal">
+      <div class="widget-head">
+        <h3>🧭 Explore the full composition surface (text × fused × image)</h3>
+        <span class="widget-note" id="surfaceNote"></span>
+      </div>
+      <div class="controls">
+        <label>Model
+          <select id="surfModel">
+            <option value="Jina-CLIP-v2">Jina-CLIP-v2</option>
+            <option value="Qwen3-VL-E-2B" selected>Qwen3-VL-Embedding-2B</option>
+          </select>
+        </label>
+        <label>Benchmark
+          <select id="surfData">
+            <option value="ChartQA">ChartQA</option>
+            <option value="SlideVQA" selected>SlideVQA</option>
+          </select>
+        </label>
+        <div class="seg" id="surfMode" role="tablist">
+          <button class="active" data-mode="before">Baseline</button>
+          <button data-mode="after">+ Trident</button>
+          <button data-mode="both">Overlay</button>
+        </div>
+      </div>
+      <div class="plot plot-3d" id="surfacePlot"></div>
+      <p class="caption">Drag to rotate, hover for exact values. Image ratio = 1 − text − fused; the corner (0, 0) is the original image-only corpus. The valley sits where <b>text-only and image-only documents coexist</b>; adding fused documents (moving toward the fused axis) softens it.</p>
+    </div>
+
+    <details class="static-figs">
+      <summary>Same comparison on ChartQA, InfoVQA, DocVQA, ViDoSeek (Fig. 16)</summary>
+      <div class="ph-wrap"><img src="static/images/fig16_surfaces_4datasets.png" alt="Figure 16" data-ph="Fig. 16 — before/after on 4 datasets (page 27)"></div>
+    </details>
+
+    <div class="split reveal">
+      <div class="split-text">
+        <h3 class="sub-title">Text distractors no longer dominate</h3>
+        <p>Under the same distractor protocol as the phenomenon study, Trident-Qwen3VL-2B keeps its text- and image-distractor curves close together:
+          the gap shrinks to <b>Δ 0.06</b> on ChartQA and <b>Δ 0.03</b> on SlideVQA, versus 0.15–0.27 for strong VLM baselines.</p>
+      </div>
+      <figure class="split-fig">
+        <div class="ph-wrap"><img src="static/images/fig10_bottom_distractors_trident.png" alt="Figure 10 bottom row" data-ph="Fig. 10 BOTTOM ROW — UniME / Jina-V5 / Trident (page 17)"></div>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 5. ANALYSIS ============================== -->
+<section class="section alt" id="analysis">
+  <div class="container">
+    <div class="eyebrow">Part 5 · Analysis</div>
+    <h2 class="section-title">What changed inside the model?</h2>
+
+    <div class="split reveal">
+      <figure class="split-fig">
+        <div class="ph-wrap"><img src="static/images/fig7_similarity_dist.png" alt="Figure 7" data-ph="Fig. 7 — similarity distributions before/after (page 9)"></div>
+      </figure>
+      <div class="split-text">
+        <h3 class="sub-title">Similarity distributions converge</h3>
+        <p>Before training, same-modality vs cross-modality positive pairs have very different centres
+          (Jina-CLIP-v2 favours Image–Image, Qwen3-VL favours Text–Text). After Trident, the six group means align.</p>
+        <div class="sigma-row">
+          <div class="sigma"><span class="sigma-model">Jina-CLIP-v2</span><span class="sigma-vals"><s>0.092</s> → <b>0.011</b></span></div>
+          <div class="sigma"><span class="sigma-model">Qwen3-VL-E-2B</span><span class="sigma-vals"><s>0.055</s> → <b>0.004</b></span></div>
+        </div>
+        <p class="small">σ of the six group means (lower = less modality-dependent).</p>
+      </div>
+    </div>
+
+    <h3 class="sub-title">Ablation: data balance and objective are complementary</h3>
+    <div class="ablation-grid reveal">
+      <div class="abl"><div class="abl-name">Qwen3-VL-E-2B</div><div class="abl-sigma">σ = 0.055</div><div class="abl-ndcg">Mix 40.12</div></div>
+      <div class="abl-arrow">→</div>
+      <div class="abl"><div class="abl-name">+ balanced data<br><small>(w/o Multi-Pos. InfoNCE)</small></div><div class="abl-sigma">σ = 0.009</div><div class="abl-ndcg">Mix 66.36</div></div>
+      <div class="abl-arrow">→</div>
+      <div class="abl ours"><div class="abl-name">+ Multi-Pos. InfoNCE<br><small>(Trident)</small></div><div class="abl-sigma">σ = 0.004</div><div class="abl-ndcg">Mix 73.90</div></div>
+      <div class="abl-arrow dim">→</div>
+      <div class="abl dim"><div class="abl-name">+ explicit balance loss<br><small>(w = 200)</small></div><div class="abl-sigma">σ = 0.003</div><div class="abl-ndcg">slightly lower NDCG</div></div>
+    </div>
+    <div class="callout neutral reveal">
+      <b>Balance ≠ equal similarity.</b> Forcing the three views to have identical cosine similarity further lowers σ but does not improve retrieval:
+      the views carry genuinely different information. What matters is that <b>no single modality systematically dominates</b> the shared softmax.
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================== Q&A ============================== -->
+<!-- <section class="section" id="qa">
+  <div class="container narrow">
+    <div class="eyebrow">Q&amp;A</div>
+    <h2 class="section-title">Frequently asked questions</h2>
+
+    <div class="qa">
+      <details class="qa-item">
+        <summary><span class="qa-q">Q</span>Isn't this just the well-known modality gap?</summary>
+        <div class="qa-a">Not quite. The modality gap is a <i>geometric</i> offset between image and text embedding clusters. On a single-modality corpus, every candidate shares the same offset, so it cancels out in ranking. In a mixed corpus, what breaks ranking is a <b>modality preference in the relevance scores</b>: relevant images get systematically lower scores than relevant <i>and irrelevant</i> text. Post-hoc gap calibration (GR-CLIP) narrows the score gap but leaves high interference rates (e.g. 81% for CLIP-ViT-L/14 + GR on image positives).</div>
+      </details>
+      <details class="qa-item">
+        <summary><span class="qa-q">Q</span>Why not simply train each modality with its own InfoNCE?</summary>
+        <div class="qa-a">A separately normalised softmax is invariant to adding the same constant to all scores of one modality (Eq. 3), so it can learn perfect within-modality rankings while text scores remain globally higher than image scores. Only a <b>shared</b> denominator makes the loss sensitive to these cross-modal baselines (Appendix E.5).</div>
+      </details>
+      <details class="qa-item">
+        <summary><span class="qa-q">Q</span>Does Trident hurt single-modality retrieval?</summary>
+        <div class="qa-a">No. Origin averages improve on both backbones (51.42 → 53.04 for Jina-CLIP-v2; 77.59 → 80.51 for Qwen3-VL-2B), and natural-image Origin averages also rise. At low Matryoshka dimensions the Origin gain grows to +7.4.</div>
+      </details>
+      <details class="qa-item">
+        <summary><span class="qa-q">Q</span>Is it specific to document images?</summary>
+        <div class="qa-a">No. On natural-image benchmarks (Google-WIT, MSCOCO, VisualNews, OVEN, MixBench Mix corpus) Trident reaches the highest Mix average on both backbones: 70.50 (vs 56.43) and 76.78 (vs 73.67).</div>
+      </details>
+      <details class="qa-item">
+        <summary><span class="qa-q">Q</span>Why not force the three views to have equal similarity?</summary>
+        <div class="qa-a">We tried an explicit balance loss. It lowers similarity dispersion (σ 0.004 → 0.003) but slightly reduces final NDCG@10. Views differ in information content — an image can hold evidence a description misses — so their optimal similarities need not coincide. Trident balances probability <i>mass</i>, not raw similarity.</div>
+      </details>
+      <details class="qa-item">
+        <summary><span class="qa-q">Q</span>Why does the VLM backbone end up flatter than CLIP?</summary>
+        <div class="qa-a">VLM embedders process text and visual tokens in one transformer, giving a shared token space from the start. Dual-tower CLIP models encode each modality separately and align them only at the output, which leaves a mild residual sensitivity to extreme modality ratios even after training.</div>
+      </details>
+    </div>
+  </div>
+</section> -->
+
+<!-- ============================== BIBTEX ============================== -->
+<section class="section alt" id="bibtex">
+  <div class="container narrow">
+    <div class="eyebrow">Citation</div>
+    <h2 class="section-title">BibTeX</h2>
+    <div class="bibtex card">
+      <button class="copy-btn" id="copyBib">Copy</button>
+<pre id="bibText">@article{sun2026chaos,
+  title={Chaos in the Text: Revealing the Modality Preference in Mixed-Modality Retrievers},
+  author={Sun, Yubo and Peng, Chunyi and Yan, Yukun and Liu, Zhenghao and Xu, Zhipeng and Mei, Sen and Xin, Linlin and Zeng, Zheni and Sun, Maosong},
+  journal={arXiv preprint arXiv:2610.11816},
+  year={2026}
+}</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="container narrow">
+    <p>Page template inspired by <a href="https://limit-of-rlvr.github.io/" target="_blank" rel="noopener">Limit of RLVR</a> and <a href="https://nerfies.github.io/" target="_blank" rel="noopener">Nerfies</a>.
+      Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.</p>
+  </div>
+</footer>
+
+<button class="to-top" id="toTop" aria-label="Back to top">↑</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js"></script>
+<script>
+  window.Plotly || document.write('<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"><\/script>');
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script src="static/js/data.js"></script>
+<script src="static/js/surface-data.js"></script>
+<script src="static/js/main.js"></script>
+</body>
+</html>

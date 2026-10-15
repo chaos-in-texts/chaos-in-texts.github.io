@@ -1,0 +1,6 @@
+.DS_Store
+__MACOSX/
+*.swp
+.idea/
+.vscode/
+__pycache__/
